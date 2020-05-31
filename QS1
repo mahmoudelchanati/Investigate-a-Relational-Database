@@ -1,0 +1,133 @@
+QUESTION SET#1 Q.1
+
+WITH  family_movies AS (
+SELECT
+      f.film_id AS movie_id,
+      f.title AS movie_title,
+      c.name AS movie_category
+FROM  film f
+JOIN  film_category fc
+ON    f.film_id=fc.film_id
+JOIN  category c
+ON    fc.category_id=c.category_id
+WHERE c.name IN ('Animation','Children','Classics','Comedy','Family','Music'))
+
+SELECT
+      movie_title,
+      movie_category,
+      COUNT (*) AS rental_count
+      FROM  family_movies fm
+      JOIN  inventory i
+      ON    i.film_id=fm.movie_id
+JOIN  rental r
+ON    i.inventory_id=r.inventory_id
+GROUP BY 1,2
+ORDER BY 2,1
+....................................................................
+QUESTION SET#1 Q.1 ALTERNATIVE FOR SUBMISSION
+
+/*What is the family-friendly category and movie in each category that has the maximum rentals?*/
+
+WITH family_movies AS (
+SELECT
+      f.film_id AS movie_id,
+      f.title AS movie_title,
+      c.name AS movie_category
+FROM  film f
+JOIN  film_category fc
+ON    f.film_id = fc.film_id
+JOIN  category c
+ON    fc.category_id = c.category_id
+WHERE c.name IN ('Animation', 'Children', 'Classics', 'Comedy', 'Family', 'Music')
+),
+
+rental_count AS (
+SELECT DISTINCT
+      fm.movie_title AS movie_title,
+      fm.movie_category AS movie_category,
+      COUNT (*) OVER (PARTITION BY fm.movie_title) AS movie_rental_count,
+      COUNT (*) OVER (PARTITION BY fm.movie_category) AS category_rental_count
+FROM  family_movies fm
+JOIN  inventory i
+ON    i.film_id = fm.movie_id
+JOIN  rental r
+ON    i.inventory_id = r.inventory_id
+),
+
+max_count AS (
+SELECT DISTINCT
+      movie_category,
+      category_rental_count,
+      MAX (rc.movie_rental_count) OVER (PARTITION BY rc.movie_category) AS max_movie_rental_count
+FROM  rental_count rc
+)
+
+SELECT
+      rc.movie_title,
+      mc.movie_category,
+      mc.category_rental_count,
+      mc.max_movie_rental_count
+FROM  rental_count rc
+JOIN  max_count mc
+ON    mc.movie_category = rc.movie_category
+AND   mc.category_rental_count = rc.category_rental_count
+AND   mc.max_movie_rental_count = rc.movie_rental_count
+ORDER BY 3 DESC, 4 DESC
+....................................................................
+QUESTION SET#1 Q.2
+
+WITH  family_movies AS (
+SELECT
+      f.film_id AS movie_id,
+      f.title AS movie_title,
+      c.name AS movie_category
+FROM  film f
+JOIN  film_category fc
+ON    f.film_id=fc.film_id
+JOIN  category c
+ON    fc.category_id=c.category_id
+WHERE c.name IN ('Animation','Children','Classics','Comedy','Family','Music'))
+
+SELECT
+      fm.movie_title,
+      fm.movie_category,
+      f.rental_duration AS rental_duration,
+      NTILE (4) OVER (ORDER BY f.rental_duration) AS levels
+FROM  film f
+JOIN  family_movies fm
+ON    f.film_id=fm.movie_id
+....................................................................
+QUESTION SET#1 Q.3 FOR SUBMISSION
+
+/*How the friendly-family movies are distributed according to their rental duration among the friendly-family categories?*/
+
+WITH  family_movies AS (
+SELECT
+      f.film_id AS movie_id,
+      f.title AS movie_title,
+      c.name AS movie_category
+FROM  film f
+JOIN  film_category fc
+ON    f.film_id = fc.film_id
+JOIN  category c
+ON    fc.category_id = c.category_id
+WHERE c.name IN ('Animation', 'Children', 'Classics', 'Comedy', 'Family', 'Music')),
+
+fm_rd_level AS (
+SELECT
+      fm.movie_title AS movie_title,
+      fm.movie_category AS movie_category,
+      f.rental_duration AS rental_duration,
+      NTILE (4) OVER (ORDER BY f.rental_duration) AS standard_quartile
+FROM  film f
+JOIN  family_movies fm
+ON    f.film_id = fm.movie_id)
+
+SELECT
+      movie_category,
+      standard_quartile,
+      COUNT (movie_title) AS movies_count
+FROM  fm_rd_level
+GROUP BY 1, 2
+ORDER BY 1, 2
+....................................................................

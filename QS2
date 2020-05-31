@@ -1,0 +1,137 @@
+QUESTION SET#2 Q.1
+
+SELECT
+      DATE_PART('month', r.rental_date) AS Rental_month,
+      DATE_PART('year', r.rental_date) AS Rental_year,
+      s.store_id AS Store_ID,
+      COUNT(r.rental_id) AS Count_rentals
+FROM  rental r
+JOIN  staff s
+ON    r.staff_id = s.staff_id
+GROUP BY 1, 2, 3
+ORDER BY 4 DESC
+....................................................................
+QUESTION SET#2 Q.2 FOR SUBMISSION
+
+/*What is the maximum monthly payment and the number of payments done in the corresponding month by the top 10 paying customers?*/
+
+WITH top10 AS(
+SELECT DISTINCT
+      c.customer_id AS customer_id,
+      c.first_name || ' ' || c.last_name AS fullname,
+      SUM (p.amount) OVER (PARTITION BY c.customer_id) AS total_amount
+FROM  payment p
+JOIN  customer c
+ON    p.customer_id = c.customer_id
+ORDER BY total_amount DESC
+LIMIT 10
+),
+
+top10monthly AS(
+SELECT
+      DATE_TRUNC('month', p.payment_date) AS pay_mon,
+      top10.fullname AS fullname,
+      COUNT(p.payment_id) AS pay_countpermon,
+      SUM(p.amount) AS pay_amount
+FROM  top10
+JOIN  payment p
+ON    top10.customer_id = p.customer_id
+GROUP BY 1, 2
+ORDER BY 2, 1
+),
+
+top10max AS(
+SELECT DISTINCT
+      fullname,
+      MAX(pay_amount) OVER (PARTITION BY fullname) AS maximum_monthly_payment
+FROM  top10monthly
+)
+
+SELECT
+      tn.pay_mon,
+      tn.fullname,
+      tn.pay_countpermon,
+      tn.pay_amount
+FROM  top10monthly tn
+JOIN  top10max tx
+ON    tn.fullname = tx.fullname
+AND   tn.pay_amount = tx.maximum_monthly_payment
+ORDER BY 4 DESC
+
+
+....................................................................
+QUESTION SET#2 Q.3 FOR SUBMISSION
+
+WITH top10 AS(
+SELECT
+      DISTINCT c.customer_id AS customer_id,
+      c.first_name || ' ' || c.last_name AS fullname,
+      SUM (p.amount) OVER (PARTITION BY c.customer_id) AS total_amount
+FROM  payment p
+JOIN  customer c
+ON    p.customer_id = c.customer_id
+ORDER BY total_amount DESC
+LIMIT 10
+)
+
+SELECT
+      DATE_TRUNC('month', p.payment_date) AS pay_mon,
+      top10.fullname AS fullname,
+      SUM(p.amount) AS pay_amount,
+      COALESCE(LEAD(SUM(p.amount)) OVER next_pay_window, 0) AS next_pay_amount,
+      COALESCE(LEAD(SUM(p.amount)) OVER next_pay_window - SUM(p.amount), 0) AS monthly_payment_difference
+FROM  top10
+JOIN  payment p
+ON    top10.customer_id = p.customer_id
+GROUP BY 1, 2
+WINDOW next_pay_window AS (PARTITION BY fullname ORDER BY DATE_TRUNC('month', p.payment_date))
+ORDER BY 2, 1
+....................................................................
+QUESTION SET#2 Q.3 MAX
+
+/*What is the maximum monthly payment difference for the top 10 maximum paying customers?*/
+
+WITH top10 AS(
+SELECT
+      DISTINCT c.customer_id AS customer_id,
+      c.first_name ||' ' || c.last_name AS fullname,
+      SUM (p.amount) OVER (PARTITION BY c.customer_id) AS total_amount
+FROM  payment p
+JOIN  customer c
+ON    p.customer_id = c.customer_id
+ORDER BY total_amount DESC
+LIMIT 10
+),
+
+month_diff AS(
+SELECT
+      DATE_TRUNC('month', p.payment_date) AS pay_mon,
+      top10.fullname AS fullname,
+      SUM(p.amount) AS pay_amount,
+      COALESCE(LEAD(SUM(p.amount)) OVER next_pay_window, 0) AS next_pay_amount,
+      COALESCE(LEAD(SUM(p.amount)) OVER next_pay_window - SUM(p.amount), 0) AS monthly_payment_difference
+FROM  top10
+JOIN  payment p
+ON    top10.customer_id = p.customer_id
+GROUP BY 1,2
+WINDOW next_pay_window AS (PARTITION BY fullname ORDER BY DATE_TRUNC('month', p.payment_date))
+ORDER BY 2,1),
+
+top10maxdiff AS(
+SELECT DISTINCT
+      fullname,
+      MAX(monthly_payment_difference) OVER (PARTITION BY fullname) AS maximum_monthly_difference
+FROM  month_diff
+)
+
+SELECT
+      md.pay_mon,
+      md.fullname,
+      md.pay_amount,
+      md.next_pay_amount,
+      md.monthly_payment_difference
+FROM  month_diff md
+JOIN  top10maxdiff t10md
+ON    md.fullname = t10md.fullname
+AND   md.monthly_payment_difference = t10md.maximum_monthly_difference
+ORDER BY 5 DESC
